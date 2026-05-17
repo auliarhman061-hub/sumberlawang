@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "author": "SMAN 1 Sumberlawang",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "id": "esp32",
+      "type": "wokwi-esp32-devkit-v1",
+      "top": 0,
+      "left": 100
+    },
+    {
+      "id": "rfid",
+      "type": "wokwi-mfrc522",
+      "top": 0,
+      "left": 350
+    },
+    {
+      "id": "lcd",
+      "type": "wokwi-lcd1602",
+      "top": 220,
+      "left": 0,
+      "attrs": { "pins": "i2c" }
+    },
+    {
+      "id": "led_r",
+      "type": "wokwi-led",
+      "top": 100,
+      "left": 480,
+      "attrs": { "color": "red" }
+    },
+    {
+      "id": "led_g",
+      "type": "wokwi-led",
+      "top": 150,
+      "left": 480,
+      "attrs": { "color": "green" }
+    },
+    {
+      "id": "led_y",
+      "type": "wokwi-led",
+      "top": 200,
+      "left": 480,
+      "attrs": { "color": "yellow" }
+    },
+    {
+      "id": "buzzer",
+      "type": "wokwi-buzzer",
+      "top": 100,
+      "left": 580
+    }
+  ],
+  "connections": [
+    ["rfid:SDA", "esp32:D5", "purple", []],
+    ["rfid:SCK", "esp32:D18", "green", []],
+    ["rfid:MOSI", "esp32:D23", "blue", []],
+    ["rfid:MISO", "esp32:D19", "yellow", []],
+    ["rfid:RST", "esp32:D27", "orange", []],
+    ["rfid:3.3V", "esp32:3V3", "red", []],
+    ["rfid:GND", "esp32:GND", "black", []],
+    ["lcd:SDA", "esp32:D21", "blue", []],
+    ["lcd:SCL", "esp32:D22", "green", []],
+    ["lcd:VCC", "esp32:VIN", "red", []],
+    ["lcd:GND", "esp32:GND", "black", []],
+    ["led_r:A", "esp32:D13", "red", []],
+    ["led_r:C", "esp32:GND", "black", []],
+    ["led_g:A", "esp32:D12", "green", []],
+    ["led_g:C", "esp32:GND", "black", []],
+    ["led_y:A", "esp32:D14", "yellow", []],
+    ["led_y:C", "esp32:GND", "black", []],
+    ["buzzer:1", "esp32:D25", "orange", []],
+    ["buzzer:2", "esp32:GND", "black", []]
+  ]
+}
