@@ -25,7 +25,7 @@ const NAV: Record<string, { label: string; href: string; icon: string }[]> = {
   ],
   student: [
     { label: "Dashboard",      href: "/student",           icon: "grid_view" },
-    { label: "Jadwal",         href: "/student/schedule",  icon: "calendar_today" },
+    { label: "Jadwal",         href: "/student/schedules", icon: "calendar_today" },
     { label: "Rekapitulasi",   href: "/student/reports",   icon: "analytics" },
     { label: "Bantuan",        href: "/student/help",      icon: "help_outline" },
     { label: "Pengaturan",     href: "/student/settings",  icon: "settings" },
