@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
+  const { loading } = useAuth();
 import { format } from "date-fns";
 
 interface Student {
@@ -200,10 +201,10 @@ function Modal({
 }
 
 export default function AdminStudentsPage() {
-  const { isLoaded } = useUser();
+  
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -219,7 +220,7 @@ export default function AdminStudentsPage() {
       if (filterClass) params.set("class_id", filterClass);
       const res = await fetch(`/api/students?${params.toString()}`);
       if (res.ok) { const d = await res.json(); setStudents(d.data || []); }
-    } finally { setLoading(false); }
+    } finally { setDataLoading(false); }
   }, [search, filterClass]);
 
   const fetchClasses = async () => {
@@ -227,7 +228,7 @@ export default function AdminStudentsPage() {
     if (res.ok) setClasses(await res.json());
   };
 
-  useEffect(() => { if (isLoaded) { fetchStudents(); fetchClasses(); } }, [isLoaded, fetchStudents]);
+  useEffect(() => { if (!loading) { fetchStudents(); fetchClasses(); } }, [fetchStudents]);
 
   const openAdd = () => { setEditing(null); setForm({ name: "", email: "", nis: "", classId: "", rfidUid: "" }); setInvitationEmail(null); setModalOpen(true); };
   const openEdit = (s: Student) => { setEditing(s); setForm({ name: s.user?.name ?? "", email: s.user?.email ?? "", nis: s.nis, classId: s.class?.id ?? "", rfidUid: s.rfidUid ?? "" }); setInvitationEmail(null); setModalOpen(true); };
@@ -264,7 +265,7 @@ export default function AdminStudentsPage() {
   const rfidCount = students.filter((s) => s.rfidUid).length;
   const noRfidCount = students.filter((s) => !s.rfidUid).length;
 
-  if (!isLoaded) return (
+  if (loading) return (
     <div className="flex items-center justify-center py-20">
       <span className="material-symbols-outlined text-4xl text-slate-300 animate-spin">progress_activity</span>
     </div>

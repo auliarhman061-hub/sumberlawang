@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 
-export async function GET() {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-
     const today = new Date().toISOString().split("T")[0];
 
     // Total students

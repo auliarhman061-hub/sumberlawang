@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
+  const { loading } = useAuth();
 
 interface Subject { id: string; name: string; abbreviation: string | null }
 interface Class { id: string; name: string }
@@ -29,10 +30,10 @@ const MONTHS = [
 ];
 
 export default function TeacherRecapPage() {
-  const { isLoaded } = useUser();
+  
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -44,9 +45,8 @@ export default function TeacherRecapPage() {
   const [totals, setTotals] = useState({ present: 0, late: 0, absent: 0, izin: 0, sick: 0 });
 
   useEffect(() => {
-    if (!isLoaded) return;
     fetchMeta();
-  }, [isLoaded]);
+  });
 
   const fetchMeta = async () => {
     try {
@@ -62,7 +62,7 @@ export default function TeacherRecapPage() {
   };
 
   const fetchRecap = async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       const params = new URLSearchParams({ month: String(month), year: String(year) });
       if (selectedSubject) params.set("subject_id", selectedSubject);
@@ -77,7 +77,7 @@ export default function TeacherRecapPage() {
         alert("Gagal memuat data");
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 

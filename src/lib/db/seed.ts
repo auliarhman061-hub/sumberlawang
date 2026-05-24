@@ -3,11 +3,10 @@ import "dotenv/config";
  * Seed Script — Lentera Sumberlawang
  * Jalankan: npx tsx src/lib/db/seed.ts
  */
-
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
-import { eq } from "drizzle-orm";
+import { hashPassword } from "../auth/password";
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
@@ -53,7 +52,7 @@ async function seed() {
 
   console.log("✅ Classes seeded:", classResults.length);
 
-  // 4. Seed Sample Students (tanpa Clerk ID untuk MVP testing)
+  // 4. Seed Sample Students with password hash
   console.log("👨‍🎓 Seeding students...");
 
   const studentData = [
@@ -83,15 +82,18 @@ async function seed() {
     "Intan Permata", "Fajar Nugroho", "Maya Sari", "Dimas Arya", "Lina Hartati",
   ];
 
+  const defaultPassword = await hashPassword("Siswa12345!");
+
   for (let i = 0; i < studentData.length; i++) {
     const { nis, rfidUid, classIndex } = studentData[i];
 
-    // Create user
+    // Create user with password hash (no clerkId — nullable)
     const [user] = await db.insert(schema.users).values({
-      clerkId: `demo_${nis}`,
       name: studentNames[i] ?? `Siswa ${nis}`,
       email: `siswa${nis}@demo.local`,
+      passwordHash: defaultPassword,
       role: "student",
+      isActive: true,
     }).returning();
 
     // Create student
@@ -104,6 +106,7 @@ async function seed() {
     });
   }
   console.log("✅ Students seeded:", studentData.length);
+  console.log("   Default password for all students: Siswa12345!");
 
   // 5. Seed Sample Attendance (yesterday & today)
   console.log("📋 Seeding attendance logs...");
@@ -133,8 +136,7 @@ async function seed() {
     }
 
     // Yesterday: mostly present
-    const yesterdayHour = 6;
-    const tapTimeY = new Date(`${yesterday}T${String(yesterdayHour).padStart(2, "0")}:${String(Math.floor(Math.random() * 30)).padStart(2, "0")}:00+07:00`);
+    const tapTimeY = new Date(`${yesterday}T06:${String(Math.floor(Math.random() * 30)).padStart(2, "0")}:00+07:00`);
 
     await db.insert(schema.attendanceLogs).values({
       studentId: student.id,
@@ -147,7 +149,11 @@ async function seed() {
   console.log("✅ Attendance logs seeded");
 
   console.log("\n🎉 Seed completed!");
-  console.log("\nTest RFID UIDs untuk testing:");
+  console.log("\nLogin credentials:");
+  console.log("  Admin:  admin@lentera.local / Admin12345!");
+  console.log("  Guru:   guru@lentera.local / Guru12345!");
+  console.log("  Siswa:  NIS / Siswa12345!");
+  console.log("\nTest RFID UIDs:");
   console.log("  - A3:B4:C5:D6 (Farhan Ramadhan - X MIPA 1)");
   console.log("  - 11:22:33:44 (Aisyah Putri - X MIPA 1)");
   console.log("  - AB:CD:EF:01 (Nanda Khoirul - XI MIPA 1)");

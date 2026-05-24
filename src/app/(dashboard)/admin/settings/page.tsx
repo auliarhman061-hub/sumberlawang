@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface SchoolHours {
   id: number;
@@ -21,11 +21,12 @@ interface Subject {
 }
 
 export default function AdminSettingsPage() {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
+
   const [activeTab, setActiveTab] = useState<"school" | "subjects">("school");
   const [schoolHours, setSchoolHours] = useState<SchoolHours | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // School hours form
@@ -43,12 +44,11 @@ export default function AdminSettingsPage() {
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
 
   useEffect(() => {
-    if (!isLoaded) return;
     fetchData();
-  }, [isLoaded]);
+  });
 
   const fetchData = async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       const [hoursRes, subjectsRes] = await Promise.all([
         fetch("/api/school-hours"),
@@ -67,7 +67,7 @@ export default function AdminSettingsPage() {
         setSubjects(await subjectsRes.json());
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 

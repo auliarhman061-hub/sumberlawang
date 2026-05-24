@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { format, parseISO } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -269,12 +269,13 @@ function StatusBadge({ status }: { status: string }) {
 
 /* ── Main Component ─────────────────────────────────── */
 export default function AdminDashboard() {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
+
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [summary, setSummary] = useState<Summary>({ present: 0, late: 0, absent: 0, total: 0, checkedIn: 0 });
   const [devices, setDevices] = useState<Device[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -299,17 +300,16 @@ export default function AdminDashboard() {
         setDevices(await devRes.value.json() ?? []);
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
       setRefreshing(false);
     }
   }, [selectedDate]);
 
   useEffect(() => {
-    if (!isLoaded) return;
     fetchAll();
     const interval = setInterval(fetchAll, 15000);
     return () => clearInterval(interval);
-  }, [isLoaded, fetchAll]);
+  }, [fetchAll]);
 
   /* ── Derived ──────────────────────────────────────── */
   const totalCheckedIn = summary.present + summary.late;

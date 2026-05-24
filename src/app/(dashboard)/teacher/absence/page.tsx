@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
+  const { loading } = useAuth();
 
 interface Student {
   id: string;
@@ -41,10 +42,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function TeacherAbsencePage() {
-  const { isLoaded } = useUser();
+  
   const [students, setStudents] = useState<Student[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -56,12 +57,11 @@ export default function TeacherAbsencePage() {
   const [searchStudent, setSearchStudent] = useState("");
 
   useEffect(() => {
-    if (!isLoaded) return;
     fetchAll();
-  }, [isLoaded]);
+  });
 
   const fetchAll = async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       const [studRes, absRes] = await Promise.all([
         fetch("/api/students?limit=100"),
@@ -76,7 +76,7 @@ export default function TeacherAbsencePage() {
         setAbsences(data.data ?? []);
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 

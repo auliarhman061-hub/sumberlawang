@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -54,7 +54,7 @@ function SummaryCard({ label, value, icon, color, bg }: { label: string; value: 
 }
 
 export default function AdminReportsPage() {
-  const { isLoaded } = useUser();
+  
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [summaries, setSummaries] = useState<StudentSummary[]>([]);
@@ -69,7 +69,7 @@ export default function AdminReportsPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (isLoaded) fetchReport(); }, [isLoaded, month, year]);
+  useEffect(() => { if (!loading) fetchReport(); }, [ month, year]);
 
   const handleExport = () => {
     if (!totals) return;

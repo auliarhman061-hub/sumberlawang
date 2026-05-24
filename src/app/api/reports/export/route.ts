@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -21,40 +21,25 @@ function escapeCSV(value: string | number | null | undefined): string {
 }
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { searchParams } = req.nextUrl;
     const parsed = querySchema.safeParse(Object.fromEntries(searchParams));
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid params" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Invalid params" }, { status: 400 });
 
     const { type, month, year, class_id } = parsed.data;
 
     if (type === "attendance") {
-      if (!month || !year) {
-        return NextResponse.json({ error: "month and year required" }, { status: 400 });
-      }
+      if (!month || !year) return NextResponse.json({ error: "month and year required" }, { status: 400 });
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
       const endDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
       const result = await db.execute(sql`
-        SELECT
-          u.name as student_name,
-          s.nis,
-          c.name as class_name,
-          al.date,
-          al.status,
-          al.tap_time,
-          al.notes
+        SELECT u.name as student_name, s.nis, c.name as class_name,
+               al.date, al.status, al.tap_time, al.notes
         FROM attendance_logs al
         INNER JOIN students s ON al.student_id = s.id
         INNER JOIN users u ON s.user_id = u.id
@@ -68,39 +53,29 @@ export async function GET(req: NextRequest) {
 
       const csvHeader = "Nama,NIS,Kelas,Tanggal,Status,Waktu Tap,Keterangan";
       const csvRows = rows.map((row) => [
-        escapeCSV(row.student_name),
-        escapeCSV(row.nis),
-        escapeCSV(row.class_name),
-        escapeCSV(row.date),
-        escapeCSV(row.status),
+        escapeCSV(row.student_name), escapeCSV(row.nis), escapeCSV(row.class_name),
+        escapeCSV(row.date), escapeCSV(row.status),
         escapeCSV(row.tap_time ? new Date(row.tap_time as string).toLocaleTimeString("id-ID") : ""),
         escapeCSV(row.notes),
       ].join(","));
 
       const csv = [csvHeader, ...csvRows].join("\n");
-      const filename = `presensi_${year}_${String(month).padStart(2, "0")}.csv`;
-
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Disposition": `attachment; filename="presensi_${year}_${String(month).padStart(2, "0")}.csv"`,
         },
       });
     }
 
     if (type === "recap") {
-      if (!month || !year) {
-        return NextResponse.json({ error: "month and year required" }, { status: 400 });
-      }
+      if (!month || !year) return NextResponse.json({ error: "month and year required" }, { status: 400 });
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
       const endDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
       const result = await db.execute(sql`
-        SELECT
-          u.name as student_name,
-          s.nis,
-          c.name as class_name,
+        SELECT u.name as student_name, s.nis, c.name as class_name,
           COALESCE(SUM(CASE WHEN al.status = 'present' THEN 1 ELSE 0 END), 0) as hadir,
           COALESCE(SUM(CASE WHEN al.status = 'late' THEN 1 ELSE 0 END), 0) as terlambat,
           COALESCE(SUM(CASE WHEN al.status = 'absent' THEN 1 ELSE 0 END), 0) as alpa,
@@ -121,33 +96,19 @@ export async function GET(req: NextRequest) {
 
       const csvHeader = "Nama,NIS,Kelas,Hadir,Terlambat,Alpa,Izin,Sakit,Persentase";
       const csvRows = rows.map((row) => {
-        const hadir = Number(row.hadir);
-        const terlambat = Number(row.terlambat);
-        const alpa = Number(row.alpa);
-        const izin = Number(row.izin);
-        const sakit = Number(row.sakit);
+        const hadir = Number(row.hadir), terlambat = Number(row.terlambat);
+        const alpa = Number(row.alpa), izin = Number(row.izin), sakit = Number(row.sakit);
         const total = hadir + terlambat + alpa + izin + sakit;
         const pct = total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0;
-        return [
-          escapeCSV(row.student_name),
-          escapeCSV(row.nis),
-          escapeCSV(row.class_name),
-          hadir,
-          terlambat,
-          alpa,
-          izin,
-          sakit,
-          pct + "%",
-        ].join(",");
+        return [escapeCSV(row.student_name), escapeCSV(row.nis), escapeCSV(row.class_name),
+          hadir, terlambat, alpa, izin, sakit, pct + "%"].join(",");
       });
 
       const csv = [csvHeader, ...csvRows].join("\n");
-      const filename = `rekap_${year}_${String(month).padStart(2, "0")}.csv`;
-
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Disposition": `attachment; filename="rekap_${year}_${String(month).padStart(2, "0")}.csv"`,
         },
       });
     }

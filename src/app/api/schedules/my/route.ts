@@ -1,19 +1,15 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireTeacherOrAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 
-export async function GET() {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  const authResult = await requireTeacherOrAdmin(req);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
 
   try {
-    // Get teacher's own schedules
+    // Get teacher's own schedules using internal user ID
     const result = await db.execute(sql`
       SELECT
         sc.id, sc.day, sc.period, sc.academic_year,
@@ -22,28 +18,16 @@ export async function GET() {
       FROM schedules sc
       INNER JOIN subjects sub ON sc.subject_id = sub.id
       INNER JOIN classes cls ON sc.class_id = cls.id
-      INNER JOIN users u ON sc.teacher_id = u.id
-      WHERE u.clerk_id = ${userId}
+      WHERE sc.teacher_id = ${user.id}
       ORDER BY sc.day ASC, sc.period ASC
     `);
 
     const rows = (result as unknown as { rows: Record<string, unknown>[] }).rows;
     return NextResponse.json({
       data: rows.map((row) => ({
-        id: row.id,
-        day: row.day,
-        period: row.period,
-        academicYear: row.academic_year,
-        subject: {
-          id: row.subject_id,
-          name: row.subject_name,
-          abbreviation: row.subject_abbreviation,
-        },
-        class: {
-          id: row.class_id,
-          name: row.class_name,
-          grade: row.class_grade,
-        },
+        id: row.id, day: row.day, period: row.period, academicYear: row.academic_year,
+        subject: { id: row.subject_id, name: row.subject_name, abbreviation: row.subject_abbreviation },
+        class: { id: row.class_id, name: row.class_name, grade: row.class_grade },
       })),
       total: rows.length,
     });

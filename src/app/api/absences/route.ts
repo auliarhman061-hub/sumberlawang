@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { absenceRequests, students, users } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { absenceRequests } from "@/lib/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -13,13 +13,8 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { searchParams } = req.nextUrl;
@@ -58,15 +53,8 @@ export async function GET(req: NextRequest) {
         reason: row.reason,
         status: row.status,
         createdAt: row.created_at,
-        student: {
-          id: row.student_id,
-          nis: row.nis,
-          name: row.student_name,
-        },
-        requestedBy: {
-          id: row.requester_id,
-          name: row.requester_name,
-        },
+        student: { id: row.student_id, nis: row.nis, name: row.student_name },
+        requestedBy: { id: row.requester_id, name: row.requester_name },
       })),
       total: rows.length,
     });
@@ -77,13 +65,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
 
   try {
     const body = await req.json();
@@ -93,12 +77,6 @@ export async function POST(req: NextRequest) {
     }
 
     const { studentId, date, type, reason } = parsed.data;
-
-    // Get internal user ID from clerk ID
-    const user = await db.query.users.findFirst({ where: eq(users.clerkId, userId) });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
 
     // Check duplicate
     const existing = await db.execute(sql`

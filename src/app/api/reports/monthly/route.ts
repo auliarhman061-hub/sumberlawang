@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -7,33 +7,23 @@ import { z } from "zod";
 const querySchema = z.object({
   month: z.coerce.number().min(1).max(12),
   year: z.coerce.number().min(2020).max(2099),
-  class_id: z.string().optional(),
+  class_id: z.string().uuid().optional(),
 });
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const { searchParams } = req.nextUrl;
     const parsed = querySchema.safeParse(Object.fromEntries(searchParams));
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid params" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Invalid params" }, { status: 400 });
 
     const { month, year, class_id } = parsed.data;
     const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
-    // Monthly attendance per student
     const result = class_id
       ? await db.execute(sql`
           SELECT s.id as student_id, u.name as student_name, s.nis,
@@ -62,7 +52,6 @@ export async function GET(req: NextRequest) {
           ORDER BY u.name ASC
         `);
 
-    // Group by student
     const studentMap: Record<string, {
       studentId: string; name: string; nis: string; class: string;
       present: number; late: number; absent: number; total: number;
@@ -87,22 +76,15 @@ export async function GET(req: NextRequest) {
     }
 
     const summaries = Object.values(studentMap).map((s) => ({
-      studentId: s.studentId,
-      name: s.name,
-      nis: s.nis,
-      class: s.class,
-      present: s.present,
-      late: s.late,
-      absent: s.absent,
-      total: s.total,
+      studentId: s.studentId, name: s.name, nis: s.nis, class: s.class,
+      present: s.present, late: s.late, absent: s.absent, total: s.total,
       percentage: s.total > 0 ? Math.round((s.present / s.total) * 100) : 0,
     }));
 
     const totals = {
       totalStudents: summaries.length,
       avgAttendance: summaries.length > 0
-        ? Math.round(summaries.reduce((a, s) => a + s.percentage, 0) / summaries.length)
-        : 0,
+        ? Math.round(summaries.reduce((a, s) => a + s.percentage, 0) / summaries.length) : 0,
       totalPresent: summaries.reduce((a, s) => a + s.present, 0),
       totalLate: summaries.reduce((a, s) => a + s.late, 0),
       totalAbsent: summaries.reduce((a, s) => a + s.absent, 0),

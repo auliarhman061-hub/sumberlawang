@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const DAYS = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu"] as const;
 const DAY_LABELS: Record<string, string> = {
@@ -18,12 +18,13 @@ interface Schedule {
 }
 
 export default function AdminSchedulesPage() {
-  const { isLoaded } = useUser();
+  const { loading } = useAuth();
+  
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Filters
@@ -42,12 +43,12 @@ export default function AdminSchedulesPage() {
   const [formAcademicYear, setFormAcademicYear] = useState("2025/2026");
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (loading) return;
     fetchAll();
-  }, [isLoaded, filterDay, filterClass, filterTeacher]);
+  }, [filterDay, filterClass, filterTeacher]);
 
   const fetchAll = async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       const params = new URLSearchParams();
       if (filterDay) params.set("day", filterDay);
@@ -75,7 +76,7 @@ export default function AdminSchedulesPage() {
         setTeachers(usersData.filter((u: User & { role?: string }) => u.role === "teacher" || true));
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 

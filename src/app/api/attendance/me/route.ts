@@ -1,30 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
 
   try {
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    // Find student by userId (clerk user id)
+    // Find student by userId (internal DB id)
     const studentRows = await db.execute(sql`
-      SELECT id FROM students
-      WHERE user_id = (
-        SELECT id FROM users WHERE clerk_id = ${userId}
-      )
-      LIMIT 1
+      SELECT id FROM students WHERE user_id = ${user.id} LIMIT 1
     `);
 
-    const rows = (studentRows as unknown as { rows: Array<Record<string, unknown>> }).rows;
+    const rows = (studentRows as unknown as { rows: Record<string, unknown>[] }).rows;
     if (rows.length === 0) {
       return NextResponse.json({
         recent: [],
@@ -42,7 +32,7 @@ export async function GET(req: NextRequest) {
       LIMIT 100
     `);
 
-    const logRows = (logs as unknown as { rows: Array<Record<string, unknown>> }).rows;
+    const logRows = (logs as unknown as { rows: Record<string, unknown>[] }).rows;
     let present = 0;
     let late = 0;
     let absent = 0;

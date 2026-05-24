@@ -28,10 +28,12 @@ export const dayEnum = pgEnum("day", ["senin", "selasa", "rabu", "kamis", "jumat
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  clerkId: varchar("clerk_id", { length: 255 }).unique().notNull(),
+  clerkId: varchar("clerk_id", { length: 255 }).unique(), // nullable sementara untuk migrasi
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).unique().notNull(),
+  passwordHash: text("password_hash"), // nullable sementara, akan jadi notNull setelah migrasi selesai
   role: roleEnum("role").notNull().default("student"),
+  isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -191,3 +193,17 @@ export const absenceRequests = pgTable(
 
 export type AbsenceRequest = typeof absenceRequests.$inferSelect;
 export type NewAbsenceRequest = typeof absenceRequests.$inferInsert;
+
+// ── sessions ──────────────────────────────────────────
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  token: varchar("token", { length: 64 }).unique().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useState } from "react";
 
 function LinkStep({ userId }: { userId: string }) {
@@ -122,9 +122,9 @@ function LinkStep({ userId }: { userId: string }) {
 }
 
 export default function OnboardingClient() {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
 
-  if (!isLoaded) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <span className="material-symbols-outlined text-4xl text-slate-300 animate-spin">progress_activity</span>

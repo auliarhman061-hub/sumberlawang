@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -28,12 +28,13 @@ function SkeletonRow() {
 }
 
 export default function TeacherDashboard() {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
+
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [summary, setSummary] = useState<Summary>({ present: 0, late: 0, absent: 0, total: 0 });
   const [selectedClass, setSelectedClass] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -52,10 +53,10 @@ export default function TeacherDashboard() {
       if (selectedClass) params.set("class_id", selectedClass);
       const res = await fetch(`/api/attendance?${params.toString()}&limit=50`);
       if (res.ok) { const d = await res.json(); setLogs(d.data || []); setSummary(d.summary || { present: 0, late: 0, absent: 0, total: 0 }); }
-    } finally { setLoading(false); }
+    } finally { setDataLoading(false); }
   };
 
-  useEffect(() => { if (isLoaded) { fetchClasses(); fetchAttendance(); } }, [isLoaded, selectedClass]);
+  useEffect(() => { if (!loading) { fetchClasses(); fetchAttendance(); } }, [selectedClass]);
 
   const handleOverride = async (id: string, status: "present" | "absent") => {
     const notes = prompt("Keterangan (opsional):") ?? undefined;
@@ -63,7 +64,7 @@ export default function TeacherDashboard() {
     if (res.ok) fetchAttendance();
   };
 
-  const userName = user?.firstName || user?.emailAddresses[0]?.emailAddress?.split("@")[0] || "Guru";
+  const userName = user?.name || "Guru";
   const activeClass = selectedClass ? classes.find((c) => c.id === selectedClass)?.name : "Semua Kelas";
 
   return (

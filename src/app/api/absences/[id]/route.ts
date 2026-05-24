@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { absenceRequests } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -12,26 +12,17 @@ const updateSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { id } = await params;
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
     const existing = await db.query.absenceRequests.findFirst({ where: eq(absenceRequests.id, id) });
-    if (!existing) {
-      return NextResponse.json({ error: "Izin/sakit tidak ditemukan" }, { status: 404 });
-    }
+    if (!existing) return NextResponse.json({ error: "Izin/sakit tidak ditemukan" }, { status: 404 });
 
     await db.update(absenceRequests).set(parsed.data).where(eq(absenceRequests.id, id));
     return NextResponse.json({ message: "Izin/sakit diperbarui" });
@@ -42,20 +33,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { id } = await params;
     const existing = await db.query.absenceRequests.findFirst({ where: eq(absenceRequests.id, id) });
-    if (!existing) {
-      return NextResponse.json({ error: "Izin/sakit tidak ditemukan" }, { status: 404 });
-    }
+    if (!existing) return NextResponse.json({ error: "Izin/sakit tidak ditemukan" }, { status: 404 });
 
     await db.delete(absenceRequests).where(eq(absenceRequests.id, id));
     return NextResponse.json({ message: "Izin/sakit dihapus" });

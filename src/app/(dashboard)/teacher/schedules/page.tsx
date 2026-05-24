@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
+  const { loading } = useAuth();
 
 const DAY_LABELS: Record<string, string> = {
   senin: "Senin", selasa: "Selasa", rabu: "Rabu",
@@ -18,17 +19,16 @@ interface Schedule {
 }
 
 export default function TeacherSchedulesPage() {
-  const { isLoaded } = useUser();
+  
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    if (!isLoaded) return;
     fetchSchedules();
-  }, [isLoaded]);
+  });
 
   const fetchSchedules = async () => {
-    setLoading(true);
+    setDataLoading(true);
     try {
       const res = await fetch("/api/schedules/my");
       if (res.ok) {
@@ -36,7 +36,7 @@ export default function TeacherSchedulesPage() {
         setSchedules(data.data ?? []);
       }
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAuth } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { schedules, subjects, classes, users } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { schedules } from "@/lib/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -15,13 +15,8 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const { searchParams } = req.nextUrl;
@@ -55,24 +50,10 @@ export async function GET(req: NextRequest) {
     const rows = (result as unknown as { rows: Record<string, unknown>[] }).rows;
     return NextResponse.json({
       data: rows.map((row) => ({
-        id: row.id,
-        day: row.day,
-        period: row.period,
-        academicYear: row.academic_year,
-        subject: {
-          id: row.subject_id,
-          name: row.subject_name,
-          abbreviation: row.subject_abbreviation,
-        },
-        class: {
-          id: row.class_id,
-          name: row.class_name,
-          grade: row.class_grade,
-        },
-        teacher: {
-          id: row.teacher_id,
-          name: row.teacher_name,
-        },
+        id: row.id, day: row.day, period: row.period, academicYear: row.academic_year,
+        subject: { id: row.subject_id, name: row.subject_name, abbreviation: row.subject_abbreviation },
+        class: { id: row.class_id, name: row.class_name, grade: row.class_grade },
+        teacher: { id: row.teacher_id, name: row.teacher_name },
       })),
       total: rows.length,
     });
@@ -83,13 +64,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body = await req.json();
@@ -100,7 +76,6 @@ export async function POST(req: NextRequest) {
 
     const { day, period, subjectId, classId, teacherId, academicYear } = parsed.data;
 
-    // Check unique constraint
     const existing = await db.execute(sql`
       SELECT id FROM schedules
       WHERE day = ${day}::day AND period = ${period}
@@ -108,18 +83,10 @@ export async function POST(req: NextRequest) {
       LIMIT 1
     `);
     if ((existing as unknown as { rows: unknown[] }).rows.length > 0) {
-      return NextResponse.json({ error: "Jadwal bentrok dengan jadwal yang sudah ada" }, { status: 409 });
+      return NextResponse.json({ error: "Jadwal bentrok" }, { status: 409 });
     }
 
-    await db.insert(schedules).values({
-      day,
-      period,
-      subjectId,
-      classId,
-      teacherId,
-      academicYear,
-    });
-
+    await db.insert(schedules).values({ day, period, subjectId, classId, teacherId, academicYear });
     return NextResponse.json({ message: "Jadwal dibuat" }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/schedules] Error:", error);

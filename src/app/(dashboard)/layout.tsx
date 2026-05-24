@@ -1,10 +1,10 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useUser, UserButton } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useEffect, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 /* ── Nav config ──────────────────────────────────── */
@@ -32,12 +32,6 @@ const NAV: Record<string, { label: string; href: string; icon: string }[]> = {
   ],
 };
 
-function getRole(pathname: string): string {
-  if (pathname.startsWith("/admin"))   return "admin";
-  if (pathname.startsWith("/teacher")) return "teacher";
-  return "student";
-}
-
 const ROLE_LABELS: Record<string, string> = {
   admin:   "Administrator",
   teacher: "Guru",
@@ -62,8 +56,7 @@ function UserAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | 
 /* ── Clock widget ────────────────────────────────── */
 function ClockWidget() {
   const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
   return (
@@ -105,25 +98,61 @@ function NavItem({ item, active }: { item: { label: string; href: string; icon: 
   );
 }
 
+/* ── Logout Button ───────────────────────────────── */
+function LogoutButton() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogout() {
+    setLoading(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/sign-in");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout error:", error);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleLogout}
+      disabled={loading}
+      className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+    >
+      <span className="material-symbols-outlined text-base">logout</span>
+      {loading ? "Keluar..." : "Keluar"}
+    </button>
+  );
+}
+
 /* ── Layout ─────────────────────────────────────── */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Use Clerk publicMetadata for role — fallback to path-based detection
-  const rawRole = user?.publicMetadata?.role as string | undefined;
-  const role = rawRole
-    || (pathname.startsWith("/admin") ? "admin" : pathname.startsWith("/teacher") ? "teacher" : "student");
+  // Detect role from user or fallback to path
+  const role = user?.role || (pathname.startsWith("/admin") ? "admin" : pathname.startsWith("/teacher") ? "teacher" : "student");
   const navItems = NAV[role] ?? NAV.student;
-  const userName = user?.firstName
-    || user?.emailAddresses[0]?.emailAddress?.split("@")[0]
-    || "Pengguna";
+  const userName = user?.name || "Pengguna";
 
   const greeting =
     new Date().getHours() < 12 ? "Selamat Pagi"
     : new Date().getHours() < 18 ? "Selamat Siang"
     : "Selamat Malam";
+
+  if (loading) {
+ return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-page flex">
@@ -165,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="text-sm font-semibold text-slate-800 truncate">{userName}</p>
               <p className="text-[10px] text-slate-400">{ROLE_LABELS[role]}</p>
             </div>
-            <UserButton />
+            <LogoutButton />
           </div>
         </div>
       </aside>
@@ -243,10 +272,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                   <UserAvatar name={userName} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{userName}</p>
+               <p className="text-sm font-semibold text-slate-800 truncate">{userName}</p>
                     <p className="text-[10px] text-slate-400">{ROLE_LABELS[role]}</p>
                   </div>
-                  <UserButton />
+                  <LogoutButton />
                 </div>
               </div>
             </aside>

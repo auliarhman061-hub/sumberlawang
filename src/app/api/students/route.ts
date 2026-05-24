@@ -1,34 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { requireTeacherOrAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
+import { hashPassword } from "@/lib/auth/password";
 
 const createStudentSchema = z.object({
   name: z.string().min(1).max(255),
-  email: z.string().email(),
+  email: z.string().email().optional(),
   nis: z.string().min(1).max(20),
   classId: z.string().uuid().optional().nullable(),
   rfidUid: z.string().max(50).optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireTeacherOrAdmin(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") ?? "";
     const classId = searchParams.get("class_id") ?? "";
 
-    // Build query using Drizzle sql template
     const searchCondition = search
       ? sql`AND (u.name LIKE ${"%" + search + "%"} OR s.nis LIKE ${"%" + search + "%"} OR s.rfid_uid LIKE ${"%" + search + "%"})`
       : sql``;
@@ -38,7 +31,7 @@ export async function GET(req: NextRequest) {
     const result = await db.execute(sql`
       SELECT
         s.id, s.nis, s.rfid_uid, s.is_active, s.class_id, s.created_at,
-        u.id as user_id, u.name, u.email, u.clerk_id,
+        u.id as user_id, u.name, u.email,
         c.id as class_id, c.name as class_name, c.grade as class_grade
       FROM students s
       LEFT JOIN users u ON s.user_id = u.id
@@ -60,16 +53,9 @@ export async function GET(req: NextRequest) {
       classId: row.class_id,
       createdAt: row.created_at ? String(row.created_at) : null,
       user: row.name ? {
-        id: row.user_id,
-        name: row.name,
-        email: row.email,
-        clerkId: row.clerk_id,
+        id: row.user_id, name: row.name, email: row.email ?? null,
       } : null,
-      class: row.class_id ? {
-        id: row.class_id,
-        name: row.class_name,
-        grade: row.class_grade,
-      } : null,
+      class: row.class_id ? { id: row.class_id, name: row.class_name, grade: row.class_grade } : null,
     }));
 
     return NextResponse.json({ data, total: data.length });
@@ -80,17 +66,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireTeacherOrAdmin(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const body = await req.json();
     const parsed = createStudentSchema.safeParse(body);
     if (!parsed.success) {
@@ -100,50 +79,50 @@ export async function POST(req: NextRequest) {
     const { name, email, nis, classId, rfidUid } = parsed.data;
 
     // Check duplicates
-    const existingEmail = await db.execute(sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`);
-    if ((existingEmail as unknown as { rows: Array<Record<string, unknown>> }).rows.length > 0) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+    if (email) {
+      const existingEmail = await db.execute(sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`);
+      if ((existingEmail as unknown as { rows: Array<Record<string, unknown>> }).rows.length > 0) {
+        return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+      }
     }
 
     const existingNis = await db.execute(sql`SELECT id FROM students WHERE nis = ${nis} LIMIT 1`);
     if ((existingNis as unknown as { rows: Array<Record<string, unknown>> }).rows.length > 0) {
-      return NextResponse.json({ error: "NIS already exists" }, { status: 409 });
+      return NextResponse.json({ error: "NIS sudah terdaftar" }, { status: 409 });
     }
 
     if (rfidUid) {
       const existingRfid = await db.execute(sql`SELECT id FROM students WHERE rfid_uid = ${rfidUid} LIMIT 1`);
       if ((existingRfid as unknown as { rows: Array<Record<string, unknown>> }).rows.length > 0) {
-        return NextResponse.json({ error: "RFID UID already registered" }, { status: 409 });
+        return NextResponse.json({ error: "RFID UID sudah terdaftar" }, { status: 409 });
       }
     }
 
-    // Create Clerk invitation → email dikirim langsung ke siswa
-    const clerk = await clerkClient();
-    await clerk.invitations.createInvitation({
-      emailAddress: email,
-      publicMetadata: { role: "student" },
-      notify: true,
-    });
+    // Hash default password
+    const tempPassword = "Siswa12345!";
+    const passwordHash = await hashPassword(tempPassword);
 
-    // Create user in DB (Clerk user dibuat saat siswa accept invitation)
+    // Create user with password
     const userResult = await db.execute(sql`
-      INSERT INTO users (clerk_id, name, email, role, created_at, updated_at)
-      VALUES (NULL, ${name}, ${email}, 'student', NOW(), NOW())
+      INSERT INTO users (name, email, password_hash, role, is_active, created_at, updated_at)
+      VALUES (${name}, ${email ?? null}, ${passwordHash}, 'student', true, NOW(), NOW())
       RETURNING id
     `);
 
-    const userId2 = (userResult as unknown as { rows: Array<Record<string, unknown>> }).rows[0]?.id;
-    if (!userId2) return NextResponse.json({ error: "Failed to create user record" }, { status: 500 });
+    const userId = (userResult as unknown as { rows: Array<Record<string, unknown>> }).rows[0]?.id;
+    if (!userId) return NextResponse.json({ error: "Gagal membuat user" }, { status: 500 });
 
     // Create student
     await db.execute(sql`
       INSERT INTO students (user_id, nis, class_id, rfid_uid, is_active, created_at)
-      VALUES (${userId2}, ${nis}, ${classId ?? null}, ${rfidUid ?? null}, true, NOW())
+      VALUES (${userId}, ${nis}, ${classId ?? null}, ${rfidUid ?? null}, true, NOW())
     `);
 
     return NextResponse.json({
-      message: "Student created",
-      invitation_sent_to: email,
+      message: "Akun siswa dibuat",
+      nis,
+      temporary_password: tempPassword,
+      instruction: "Berikan NIS dan password ke siswa untuk login.",
     }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/students] Error:", error);

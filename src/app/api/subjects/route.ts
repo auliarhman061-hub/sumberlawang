@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { requireAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { subjects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -11,14 +11,9 @@ const createSchema = z.object({
   type: z.enum(["wajib", "pilihan"]).optional(),
 });
 
-export async function GET() {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  const authResult = await requireAdmin(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const result = await db.query.subjects.findMany({
@@ -32,13 +27,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await requireAdmin(req);
+  if (authResult instanceof NextResponse) return authResult;
 
   try {
     const body = await req.json();
@@ -49,11 +39,8 @@ export async function POST(req: NextRequest) {
 
     const { name, abbreviation, type } = parsed.data;
 
-    // Check duplicate name
     const existing = await db.query.subjects.findFirst({ where: eq(subjects.name, name) });
-    if (existing) {
-      return NextResponse.json({ error: "Mata pelajaran sudah ada" }, { status: 409 });
-    }
+    if (existing) return NextResponse.json({ error: "Mata pelajaran sudah ada" }, { status: 409 });
 
     const [result] = await db.insert(subjects).values({
       name,

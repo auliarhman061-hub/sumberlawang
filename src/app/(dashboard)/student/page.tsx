@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -65,14 +65,15 @@ const WEEKLY_DATA = [
 ];
 
 export default function StudentDashboard() {
-  const { user, isLoaded } = useUser();
+  const { user, loading } = useAuth();
+
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [stats, setStats] = useState<Stats>({ totalDays: 0, present: 0, late: 0, absent: 0, percentage: 0 });
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [now, setNow] = useState(new Date());
 
   const quote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-  const userName = user?.fullName || user?.firstName || user?.emailAddresses[0]?.emailAddress?.split("@")[0] || "Siswa";
+  const userName = user?.name || "Siswa";
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -80,7 +81,7 @@ export default function StudentDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !user) return;
+    if (loading || !user) return;
     const fetchAttendance = async () => {
       try {
         const res = await fetch("/api/attendance/me");
@@ -89,10 +90,10 @@ export default function StudentDashboard() {
           setLogs(d.recent || []);
           setStats(d.stats || { totalDays: 0, present: 0, late: 0, absent: 0, percentage: 0 });
         }
-      } finally { setLoading(false); }
+      } finally { setDataLoading(false); }
     };
     fetchAttendance();
-  }, [isLoaded, user]);
+  }, [user]);
 
   const greeting = now.getHours() < 12 ? "Selamat Pagi" : now.getHours() < 18 ? "Selamat Siang" : "Selamat Malam";
 
