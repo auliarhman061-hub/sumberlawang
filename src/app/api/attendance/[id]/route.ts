@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { attendanceLogs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -10,73 +9,44 @@ const patchSchema = z.object({
   notes: z.string().optional(),
 });
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let userId: string | null = null;
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    ({ userId } = await auth());
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  try {
     const { id } = await params;
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
-
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
     const { status, notes } = parsed.data;
 
-    // Get user role from Clerk
-    const { users: clerkUsers } = await clerkClient();
-    const user = await clerkUsers.getUser(userId);
-    const role = (user.publicMetadata?.role as string) ?? "student";
-
-    // Only teacher and admin can override
-    if (role !== "teacher" && role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // Check if exists
+    const existing = await db.execute(sql`SELECT id FROM attendance_logs WHERE id = ${id} LIMIT 1`);
+    if ((existing as unknown as { rows: Array<Record<string, unknown>> }).rows.length === 0) {
+      return NextResponse.json({ error: "Attendance log not found" }, { status: 404 });
     }
 
-    // Check if attendance log exists
-    const existing = await db.query.attendanceLogs.findFirst({
-      where: eq(attendanceLogs.id, id),
-      with: { student: true },
-    });
+    const now = new Date().toISOString();
+    await db.execute(sql`
+      UPDATE attendance_logs
+      SET status = ${status},
+          notes = ${notes ?? null},
+          override_by = ${userId},
+          override_at = ${now}
+      WHERE id = ${id}
+    `);
 
-    if (!existing) {
-      return NextResponse.json(
-        { error: "Attendance log not found" },
-        { status: 404 }
-      );
-    }
-
-    // Update the attendance
-    await db
-      .update(attendanceLogs)
-      .set({
-        status,
-        notes: notes ?? null,
-        overrideBy: userId,
-        overrideAt: new Date(),
-      })
-      .where(eq(attendanceLogs.id, id));
-
-    return NextResponse.json({
-      message: "Attendance updated",
-      id,
-      status,
-      notes,
-      overrideBy: userId,
-      overrideAt: new Date().toISOString(),
-    });
+    return NextResponse.json({ id, status, notes: notes ?? null, overrideBy: userId, overrideAt: now });
   } catch (error) {
-    console.error("Override attendance error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("[PATCH /api/attendance/:id] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,87 +1,116 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { attendanceLogs, students, classes, users } from "@/lib/db/schema";
-import { eq, and, desc, count } from "drizzle-orm";
-import { z } from "zod";
-
-const querySchema = z.object({
-  date: z.string().optional(),
-  class_id: z.string().optional(),
-  status: z.enum(["present", "late", "absent"]).optional(),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(50),
-});
+import { sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
+  let userId: string | null = null;
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    ({ userId } = await auth());
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  try {
     const { searchParams } = req.nextUrl;
-    const parsed = querySchema.safeParse(Object.fromEntries(searchParams));
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid query params" }, { status: 400 });
+    const date = searchParams.get("date") ?? new Date().toISOString().split("T")[0];
+    const class_id = searchParams.get("class_id") ?? "";
+    const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+
+    // Total students
+    const totalResult = class_id
+      ? await db.execute(sql`
+          SELECT COUNT(*) as cnt FROM students
+          WHERE is_active = true AND class_id = ${class_id}
+        `)
+      : await db.execute(sql`
+          SELECT COUNT(*) as cnt FROM students WHERE is_active = true
+        `);
+    const totalStudents = parseInt(
+      String((totalResult as unknown as { rows: Array<Record<string, unknown>> }).rows[0]?.cnt ?? 0)
+    ) || 0;
+
+    // Attendance today
+    const attendanceResult = class_id
+      ? await db.execute(sql`
+          SELECT al.status, COUNT(*) as cnt
+          FROM attendance_logs al
+          INNER JOIN students s ON al.student_id = s.id
+          WHERE al.date = ${date} AND s.class_id = ${class_id}
+          GROUP BY al.status
+        `)
+      : await db.execute(sql`
+          SELECT al.status, COUNT(*) as cnt
+          FROM attendance_logs al
+          INNER JOIN students s ON al.student_id = s.id
+          WHERE al.date = ${date}
+          GROUP BY al.status
+        `);
+
+    let presentCount = 0;
+    let lateCount = 0;
+    for (const row of (attendanceResult as unknown as { rows: Array<Record<string, unknown>> }).rows) {
+      if (row.status === "present") presentCount = parseInt(String(row.cnt)) || 0;
+      if (row.status === "late") lateCount = parseInt(String(row.cnt)) || 0;
     }
 
-    const { date, status, limit } = parsed.data;
-    const page = parsed.data.page ?? 1;
-    const offset = (page - 1) * limit;
-    const today = new Date().toISOString().split("T")[0];
-    const targetDate = date ?? today;
+    const absentCount = Math.max(0, totalStudents - presentCount - lateCount);
 
-    // Get user role from Clerk
-    const { users: clerkUsers } = await clerkClient();
-    const user = await clerkUsers.getUser(userId);
-    const role = (user.publicMetadata?.role as string) ?? "student";
+    // Data rows
+    const rowsResult = class_id
+      ? await db.execute(sql`
+          SELECT al.id, al.tap_time, al.status, al.notes, al.date,
+                 s.id as student_id, u.name as student_name, s.nis,
+                 c.name as class_name, s.class_id
+          FROM attendance_logs al
+          INNER JOIN students s ON al.student_id = s.id
+          INNER JOIN users u ON s.user_id = u.id
+          LEFT JOIN classes c ON s.class_id = c.id
+          WHERE al.date = ${date} AND s.class_id = ${class_id}
+          ORDER BY al.tap_time DESC
+          LIMIT ${limit}
+        `)
+      : await db.execute(sql`
+          SELECT al.id, al.tap_time, al.status, al.notes, al.date,
+                 s.id as student_id, u.name as student_name, s.nis,
+                 c.name as class_name, s.class_id
+          FROM attendance_logs al
+          INNER JOIN students s ON al.student_id = s.id
+          INNER JOIN users u ON s.user_id = u.id
+          LEFT JOIN classes c ON s.class_id = c.id
+          WHERE al.date = ${date}
+          ORDER BY al.tap_time DESC
+          LIMIT ${limit}
+        `);
 
-    // Build all where conditions
-    const conditions = [eq(attendanceLogs.date, targetDate)];
-    if (status) {
-      conditions.push(eq(attendanceLogs.status, status));
-    }
+    const rows = (rowsResult as unknown as { rows: Array<Record<string, unknown>> }).rows;
+    const data = rows.map((row) => ({
+      id: row.id,
+      tapTime: row.tap_time,
+      status: row.status,
+      notes: row.notes,
+      date: row.date,
+      studentId: row.student_id,
+      studentName: row.student_name,
+      nis: row.nis,
+      className: row.class_name,
+      classId: row.class_id,
+    }));
 
-    // Execute query with all conditions
-    const data = await db
-      .select({
-        id: attendanceLogs.id,
-        tapTime: attendanceLogs.tapTime,
-        status: attendanceLogs.status,
-        notes: attendanceLogs.notes,
-        date: attendanceLogs.date,
-        studentId: students.id,
-        studentName: users.name,
-        nis: students.nis,
-        className: classes.name,
-      })
-      .from(attendanceLogs)
-      .innerJoin(students, eq(attendanceLogs.studentId, students.id))
-      .innerJoin(users, eq(students.userId, users.id))
-      .leftJoin(classes, eq(students.classId, classes.id))
-      .where(and(...conditions))
-      .orderBy(desc(attendanceLogs.tapTime))
-      .limit(limit)
-      .offset(offset);
-
-    // Summary counts
-    const summaryRaw = await db
-      .select({ status: attendanceLogs.status, count: count() })
-      .from(attendanceLogs)
-      .where(eq(attendanceLogs.date, targetDate))
-      .groupBy(attendanceLogs.status);
-
-    const summary = {
-      present: Number(summaryRaw.find((s) => s.status === "present")?.count ?? 0),
-      late: Number(summaryRaw.find((s) => s.status === "late")?.count ?? 0),
-      absent: Number(summaryRaw.find((s) => s.status === "absent")?.count ?? 0),
-      total: summaryRaw.reduce((acc, s) => acc + Number(s.count), 0),
-    };
-
-    return NextResponse.json({ data, summary, page, limit });
+    return NextResponse.json({
+      data,
+      summary: {
+        present: presentCount,
+        late: lateCount,
+        absent: absentCount,
+        total: totalStudents,
+        checkedIn: presentCount + lateCount,
+      },
+      limit,
+    });
   } catch (error) {
-    console.error("Get attendance error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[GET /api/attendance] Error:", error);
+    return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
   }
 }

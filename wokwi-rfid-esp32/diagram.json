@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "author": "Lentera Sumberlawang",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board",
+      "id": "esp32devkit",
+      "name": "ESP32 DevKit v1",
+      "pins": [
+        { "name": "D5",  "port": "gpio", "data": 5  },
+        { "name": "D18", "port": "gpio", "data": 18 },
+        { "name": "D19", "port": "gpio", "data": 19 },
+        { "name": "D21", "port": "gpio", "data": 21 },
+        { "name": "D22", "port": "gpio", "data": 22 },
+        { "name": "D23", "port": "gpio", "data": 23 },
+        { "name": "D3",  "port": "gpio", "data": 3  }
+      ]
+    },
+    {
+      "type": "part",
+      "id": "rc522",
+      "name": "MFRC522 RFID Reader",
+      "pins": [
+        { "name": "RST", "port": "gpio", "data": 22 },
+        { "name": "SDA", "port": "gpio", "data": 5  },
+        { "name": "MOSI","port": "gpio", "data": 23 },
+        { "name": "MISO","port": "gpio", "data": 19 },
+        { "name": "SCK", "port": "gpio", "data": 18 },
+        { "name": "GND", "port": "gnd",  "data": 0  },
+        { "name": "3.3V","port": "vcc",  "data": 3  }
+      ]
+    },
+    {
+      "type": "part",
+      "id": "lcd",
+      "name": "LCD 16x2 I2C",
+      "pins": [
+        { "name": "SDA", "port": "gpio", "data": 21 },
+        { "name": "SCL", "port": "gpio", "data": 22 },
+        { "name": "GND", "port": "gnd",  "data": 0  },
+        { "name": "VCC", "port": "vcc",  "data": 3  }
+      ]
+    },
+    {
+      "type": "part",
+      "id": "rfid-tag",
+      "name": "RFID Card",
+      "pins": []
+    }
+  ],
+  "connections": [
+    ["esp32devkit:D5",  "rc522:SDA"],
+    ["esp32devkit:D22", "rc522:RST"],
+    ["esp32devkit:D23", "rc522:MOSI"],
+    ["esp32devkit:D19", "rc522:MISO"],
+    ["esp32devkit:D18", "rc522:SCK"],
+    ["esp32devkit:3.3V","rc522:3.3V"],
+    ["esp32devkit:GND", "rc522:GND"],
+    ["esp32devkit:D21", "lcd:SDA"],
+    ["esp32devkit:D22", "lcd:SCL"],
+    ["esp32devkit:3.3V","lcd:VCC"],
+    ["esp32devkit:GND", "lcd:GND"]
+  ]
+}

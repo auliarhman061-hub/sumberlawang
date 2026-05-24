@@ -58,16 +58,10 @@ export async function POST(req: NextRequest) {
     const minutes = parseInt(timePart.split(":")[1] ?? "0", 10);
     const totalMinutes = hours * 60 + minutes;
 
-    // 4. Check school hours: 06:00 - 08:30 WIB
-    if (totalMinutes < 360 || totalMinutes > 510) {
-      return NextResponse.json({
-        error: "Outside school hours",
-        message: `Tap hanya diizinkan 06:00-08:30`,
-      }, { status: 400 });
-    }
-
-    // 5. Status
-    const status = totalMinutes <= 420 ? "present" : "late";
+    // 4. Determine status based on time
+    // 06:00-07:00 WIB = present, di luar jam = selalu late
+    const isWithinSchoolHours = totalMinutes >= 360 && totalMinutes <= 510;
+    const status = (totalMinutes <= 420) ? "present" : "late";
 
     // 6. Find student by RFID UID
     const student = await db.query.students.findFirst({

@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Lentera Sumberlawang",
-  description: "Sistem Presensi Digital RFID - SMAN 1 Sumberlawang",
+  title: "Lentera Sumberlawang — Sistem Presensi Digital SMAN 1 Sumberlawang",
+  description:
+    "Sistem Presensi Digital berbasis RFID untuk SMAN 1 Sumberlawang. Pantau kehadiran siswa secara real-time.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -25,11 +25,16 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html
-        lang="id"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col">{children}</body>
+      <html lang="id" className={`${inter.variable}`}>
+        <head>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+            rel="stylesheet"
+          />
+        </head>
+        <body className="min-h-screen bg-surface text-on-surface antialiased">
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );
