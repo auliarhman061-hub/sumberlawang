@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-  const { loading } = useAuth();
 import { format } from "date-fns";
 
 interface Student {
@@ -202,6 +201,7 @@ function Modal({
 
 export default function AdminStudentsPage() {
   
+  const { loading } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [dataLoading, setDataLoading] = useState(true);

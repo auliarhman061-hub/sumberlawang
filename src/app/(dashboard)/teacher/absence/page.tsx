@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-  const { loading } = useAuth();
 
 interface Student {
   id: string;
@@ -23,6 +22,7 @@ interface Absence {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const { loading } = useAuth();
   switch (status) {
     case "approved":
       return <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase rounded-full border border-emerald-100">
@@ -42,6 +42,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function TeacherAbsencePage() {
+  const { loading } = useAuth();
   
   const [students, setStudents] = useState<Student[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);

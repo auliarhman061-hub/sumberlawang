@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-  const { loading } = useAuth();
 
 interface Subject { id: string; name: string; abbreviation: string | null }
 interface Class { id: string; name: string }
@@ -30,6 +29,7 @@ const MONTHS = [
 ];
 
 export default function TeacherRecapPage() {
+  const { loading } = useAuth();
   
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);

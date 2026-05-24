@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-  const { loading } = useAuth();
 
 const DAY_LABELS: Record<string, string> = {
   senin: "Senin", selasa: "Selasa", rabu: "Rabu",
@@ -19,6 +18,7 @@ interface Schedule {
 }
 
 export default function TeacherSchedulesPage() {
+  const { loading } = useAuth();
   
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [dataLoading, setDataLoading] = useState(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { AuthUser } from "@/lib/auth/types";
 
 interface AuthContextValue {
@@ -19,7 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchUser() {
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       if (res.ok) {
@@ -33,14 +33,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    fetchUser();
   }, []);
 
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, refresh: fetchUser }}>
+    <AuthContext.Provider value={{ user, loading, refresh }}>
       {children}
     </AuthContext.Provider>
   );
