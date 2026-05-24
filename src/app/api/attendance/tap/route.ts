@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { students, devices, attendanceLogs, users, classes } from "@/lib/db/schema";
+import { students, devices, attendanceLogs, users, classes, absenceRequests } from "@/lib/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -86,6 +86,27 @@ export async function POST(req: NextRequest) {
       className = classData?.name ?? "Unknown";
     }
 
+    // 8.5. Extract date part for absence check
+    const dateOnly = timestamp.split("T")[0];
+
+    // 8.5b. Check if student already has approved izin/sakit today
+    const approvedAbsence = await db.query.absenceRequests.findFirst({
+      where: and(
+        eq(absenceRequests.studentId, student.id),
+        eq(absenceRequests.date, dateOnly),
+        eq(absenceRequests.status, "approved")
+      ),
+    });
+
+    if (approvedAbsence) {
+      return NextResponse.json({
+        status: approvedAbsence.type, // "izin" | "sakit"
+        student_name: studentUser?.name ?? "Unknown",
+        class: className,
+        message: `${approvedAbsence.type.toUpperCase()} - ${studentUser?.name ?? "Unknown"}`,
+      });
+    }
+
     // 9. Duplicate check (5 menit)
     const fiveMinutesAgo = new Date(tapTime.getTime() - 5 * 60 * 1000);
     const existingLog = await db.query.attendanceLogs.findFirst({
@@ -103,7 +124,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 10. Insert attendance log
-    const dateOnly = timestamp.split("T")[0];
     await db.insert(attendanceLogs).values({
       studentId: student.id,
       tapTime,

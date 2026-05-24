@@ -9,6 +9,7 @@ import {
   date,
   pgEnum,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -17,7 +18,13 @@ export const attendanceStatusEnum = pgEnum("attendance_status", [
   "present",
   "late",
   "absent",
+  "izin",
+  "sakit",
 ]);
+export const subjectTypeEnum = pgEnum("subject_type", ["wajib", "pilihan"]);
+export const absenceTypeEnum = pgEnum("absence_type", ["izin", "sakit"]);
+export const absenceStatusEnum = pgEnum("absence_status", ["pending", "approved", "rejected"]);
+export const dayEnum = pgEnum("day", ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -97,3 +104,90 @@ export type NewClass = typeof classes.$inferInsert;
 export type Device = typeof devices.$inferSelect;
 export type AttendanceLog = typeof attendanceLogs.$inferSelect;
 export type NewAttendanceLog = typeof attendanceLogs.$inferInsert;
+
+// ── subjects ────────────────────────────────────────
+export const subjects = pgTable("subjects", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  abbreviation: varchar("abbreviation", { length: 20 }),
+  type: subjectTypeEnum("type").default("wajib"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Subject = typeof subjects.$inferSelect;
+export type NewSubject = typeof subjects.$inferInsert;
+
+// ── school_hours ─────────────────────────────────────
+export const schoolHours = pgTable("school_hours", {
+  id: integer("id").primaryKey().default(1),
+  openTime: varchar("open_time", { length: 5 }).notNull().default("06:00"),
+  lateThreshold: varchar("late_threshold", { length: 5 }).notNull().default("07:00"),
+  closeTime: varchar("close_time", { length: 5 }).notNull().default("16:00"),
+  periods: integer("periods").notNull().default(8),
+  periodMinutes: integer("period_minutes").notNull().default(45),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedBy: uuid("updated_by").references(() => users.id),
+});
+
+export type SchoolHours = typeof schoolHours.$inferSelect;
+export type NewSchoolHours = typeof schoolHours.$inferInsert;
+
+// ── schedules ─────────────────────────────────────────
+export const schedules = pgTable(
+  "schedules",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    day: dayEnum("day").notNull(),
+    period: integer("period").notNull(),
+    subjectId: uuid("subject_id")
+      .references(() => subjects.id)
+      .notNull(),
+    classId: uuid("class_id")
+      .references(() => classes.id)
+      .notNull(),
+    teacherId: uuid("teacher_id")
+      .references(() => users.id)
+      .notNull(),
+    academicYear: varchar("academic_year", { length: 10 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueSchedule: unique("unique_schedule").on(
+      table.day,
+      table.period,
+      table.classId,
+      table.academicYear
+    ),
+    classDayIdx: index("idx_schedules_class_day").on(table.classId, table.day),
+    teacherIdx: index("idx_schedules_teacher").on(table.teacherId),
+  })
+);
+
+export type Schedule = typeof schedules.$inferSelect;
+export type NewSchedule = typeof schedules.$inferInsert;
+
+// ── absence_requests ──────────────────────────────────
+export const absenceRequests = pgTable(
+  "absence_requests",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    studentId: uuid("student_id")
+      .references(() => students.id)
+      .notNull(),
+    date: date("date").notNull(),
+    type: absenceTypeEnum("type").notNull(),
+    reason: text("reason"),
+    requestedBy: uuid("requested_by")
+      .references(() => users.id)
+      .notNull(),
+    status: absenceStatusEnum("status").default("approved").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueStudentDate: unique("unique_absence").on(table.studentId, table.date),
+    studentDateIdx: index("idx_absences_student_date").on(table.studentId, table.date),
+  })
+);
+
+export type AbsenceRequest = typeof absenceRequests.$inferSelect;
+export type NewAbsenceRequest = typeof absenceRequests.$inferInsert;

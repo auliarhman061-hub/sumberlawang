@@ -10,16 +10,18 @@ import { id } from "date-fns/locale";
 /* ── Nav config ──────────────────────────────────── */
 const NAV: Record<string, { label: string; href: string; icon: string }[]> = {
   admin: [
-    { label: "Dashboard",      href: "/admin",             icon: "dashboard" },
-    { label: "Data Siswa",     href: "/admin/students",    icon: "group" },
+    { label: "Dashboard",       href: "/admin",             icon: "dashboard" },
+    { label: "Data Siswa",      href: "/admin/students",    icon: "group" },
+    { label: "Jadwal",          href: "/admin/schedules",   icon: "calendar_today" },
     { label: "Laporan Bulanan", href: "/admin/reports",     icon: "description" },
-    { label: "Pengaturan",     href: "/admin/settings",    icon: "settings" },
+    { label: "Pengaturan",      href: "/admin/settings",    icon: "settings" },
   ],
   teacher: [
-    { label: "Dashboard",       href: "/teacher",          icon: "grid_view" },
-    { label: "Jadwal Pelajaran",href: "/teacher/schedule", icon: "calendar_today" },
-    { label: "Rekapitulasi",    href: "/teacher/reports",  icon: "analytics" },
-    { label: "Pengaturan",      href: "/teacher/settings",  icon: "settings" },
+    { label: "Dashboard",        href: "/teacher",           icon: "dashboard" },
+    { label: "Jadwal Mengajar",  href: "/teacher/schedules", icon: "calendar_today" },
+    { label: "Izin & Sakit",     href: "/teacher/absence",   icon: "event_available" },
+    { label: "Rekapitulasi",     href: "/teacher/recap",     icon: "analytics" },
+    { label: "Pengaturan",       href: "/teacher/settings",  icon: "settings" },
   ],
   student: [
     { label: "Dashboard",      href: "/student",           icon: "grid_view" },
