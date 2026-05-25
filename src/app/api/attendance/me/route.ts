@@ -7,9 +7,13 @@ export async function GET(req: NextRequest) {
   const authResult = await requireAuth(req);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
+  const { searchParams } = req.nextUrl;
+  const start = searchParams.get("start");
+  const end = searchParams.get("end");
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "30"), 100);
 
   try {
-    // Find student by userId (internal DB id)
+    // Find student by userId
     const studentRows = await db.execute(sql`
       SELECT id FROM students WHERE user_id = ${user.id} LIMIT 1
     `);
@@ -24,12 +28,20 @@ export async function GET(req: NextRequest) {
 
     const studentId = rows[0].id;
 
+    // Build date filter
+    let dateFilter = "";
+    const params: string[] = [];
+    if (start && end) {
+      dateFilter = `AND al.date >= '${start}' AND al.date <= '${end}'`;
+    }
+
     const logs = await db.execute(sql`
       SELECT al.id, al.tap_time, al.status, al.date
       FROM attendance_logs al
       WHERE al.student_id = ${studentId}
-      ORDER BY al.tap_time DESC
-      LIMIT 100
+        ${start && end ? sql`AND al.date >= ${start} AND al.date <= ${end}` : sql``}
+      ORDER BY al.date DESC, al.tap_time DESC
+      LIMIT ${limit}
     `);
 
     const logRows = (logs as unknown as { rows: Record<string, unknown>[] }).rows;
@@ -46,7 +58,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       recent: logRows.map((row) => ({
         id: row.id,
-        tapTime: row.tapTime,
+        tapTime: row.tap_time,
         status: row.status,
         date: row.date,
       })),
@@ -55,7 +67,7 @@ export async function GET(req: NextRequest) {
         present,
         late,
         absent,
-        percentage: total > 0 ? Math.round((present / total) * 100) : 0,
+        percentage: total > 0 ? Math.round(((present + late) / total) * 100) : 0,
       },
     });
   } catch (error) {

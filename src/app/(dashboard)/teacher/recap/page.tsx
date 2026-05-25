@@ -30,10 +30,10 @@ const MONTHS = [
 
 export default function TeacherRecapPage() {
   const { loading } = useAuth();
-  
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
-  const [dataLoading, setDataLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -43,43 +43,30 @@ export default function TeacherRecapPage() {
 
   const [recap, setRecap] = useState<RecapRow[]>([]);
   const [totals, setTotals] = useState({ present: 0, late: 0, absent: 0, izin: 0, sick: 0 });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [loadingMeta, setLoadingMeta] = useState(true);
 
   useEffect(() => {
-    fetchMeta();
-  });
+    Promise.all([
+      fetch("/api/subjects").then((r) => r.ok ? r.json() : []).then(setSubjects),
+      fetch("/api/classes").then((r) => r.ok ? r.json() : []).then(setClasses),
+    ]);
+  }, []);
 
-  const fetchMeta = async () => {
-    try {
-      const [subRes, clsRes] = await Promise.all([
-        fetch("/api/subjects"),
-        fetch("/api/classes"),
-      ]);
-      if (subRes.ok) setSubjects(await subRes.json());
-      if (clsRes.ok) setClasses(await clsRes.json());
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const fetchRecap = async () => {
+  useEffect(() => {
     setDataLoading(true);
-    try {
-      const params = new URLSearchParams({ month: String(month), year: String(year) });
-      if (selectedSubject) params.set("subject_id", selectedSubject);
-      if (selectedClass) params.set("class_id", selectedClass);
-
-      const res = await fetch(`/api/reports/teacher?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
+    const params = new URLSearchParams({ month: String(month), year: String(year) });
+    if (selectedSubject) params.set("subject_id", selectedSubject);
+    if (selectedClass) params.set("class_id", selectedClass);
+    fetch(`/api/reports/teacher?${params.toString()}`)
+      .then((r) => r.ok ? r.json() : { breakdown: [], totals: { present: 0, late: 0, absent: 0, izin: 0, sick: 0 } })
+      .then((data) => {
         setRecap(data.breakdown ?? []);
         setTotals(data.totals ?? { present: 0, late: 0, absent: 0, izin: 0, sick: 0 });
-      } else {
-        alert("Gagal memuat data");
-      }
-    } finally {
-      setDataLoading(false);
-    }
-  };
+      })
+      .catch(() => setRecap([]))
+      .finally(() => setDataLoading(false));
+  }, [month, year, selectedSubject, selectedClass, refreshKey]);
 
   const exportCSV = async () => {
     setExporting(true);
@@ -166,11 +153,11 @@ export default function TeacherRecapPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={fetchRecap}
-            disabled={loading}
+            onClick={() => setRefreshKey((k) => k + 1)}
+            disabled={dataLoading}
             className="px-5 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50"
           >
-            {loading ? "Memuat..." : "Tampilkan Rekap"}
+            {dataLoading ? "Memuat..." : "Tampilkan Rekap"}
           </button>
           <button
             onClick={exportCSV}
@@ -227,7 +214,7 @@ export default function TeacherRecapPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
+              {dataLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 9 }).map((_, j) => (
